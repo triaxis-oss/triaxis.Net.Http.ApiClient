@@ -110,6 +110,11 @@ namespace triaxis.Net.Http
 
             if (response.IsSuccessStatusCode)
             {
+                if (response.Content.Headers.ContentLength == 0)
+                {
+                    // empty content deserializes as deafult value, JsonSerializer would crash
+                    return default;
+                }
                 return await JsonSerializer.DeserializeAsync<TResult>(stream, SerializerOptions);
             }
 
