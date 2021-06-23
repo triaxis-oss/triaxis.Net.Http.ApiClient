@@ -101,7 +101,7 @@ namespace triaxis.Net.Http
             var sw = System.Diagnostics.Stopwatch.StartNew();
             using var request = new HttpRequestMessage(method, query);
             // always set content, some methods fail without Content-Type set
-            request.Content = new JsonContent<TContent>(content, SerializerOptions);
+            request.Content = content as HttpContent ?? new JsonContent<TContent>(content, SerializerOptions);
             using var response = await SendAsync(request);
             using var stream = await response.Content.ReadAsStreamAsync();
             sw.Stop();
