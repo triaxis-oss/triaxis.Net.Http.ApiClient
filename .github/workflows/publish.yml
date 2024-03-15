@@ -12,16 +12,8 @@ jobs:
   publish:
     name: Publish nuget
     runs-on: ubuntu-latest
-    env:
-      DOTNET_NOLOGO: true
-      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: true
-
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-dotnet@v1
-        with:
-          dotnet-version: 3.1.x
-
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
       - run: dotnet test --no-build -c Release -l trx -r .

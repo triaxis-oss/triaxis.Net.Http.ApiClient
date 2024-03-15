@@ -14,10 +14,15 @@ namespace triaxis.Net.Http
     public class ApiClient : HttpClient
     {
         /// <summary>
-        /// Shared <see cref="HttpClientHandler" /> used by default
+        /// Shared <see cref="HttpMessageHandler" /> used by default
         /// to avoid the dispose issues with <see cref="HttpClient" /> instances
         /// </summary>
-        public static HttpClientHandler SharedHandler { get; } = new HttpClientHandler();
+        public static HttpMessageHandler SharedHandler { get; }
+#if NET5_0_OR_GREATER
+            = new SocketsHttpHandler() { PooledConnectionLifetime = TimeSpan.FromMinutes(2) };
+#else
+            = new HttpClientHandler();
+#endif
 
         // default options
         private static readonly JsonSerializerOptions s_defaultOptions = new JsonSerializerOptions
@@ -47,7 +52,7 @@ namespace triaxis.Net.Http
         /// <summary>
         /// Optional logger for request diagnostics
         /// </summary>
-        protected ILogger Logger { get; set; }
+        protected ILogger? Logger { get; set; }
         /// <summary>
         /// JSON serialization options
         /// </summary>
@@ -56,7 +61,7 @@ namespace triaxis.Net.Http
         /// <summary>
         /// Retrieves an object of the specified type from the specified path
         /// </summary>
-        public Task<T> GetAsync<T>(string query)
+        public Task<T?> GetAsync<T>(string query)
             => ExecuteAsync<T>(HttpMethod.Get, query);
         /// <summary>
         /// Posts an object of the specified type to the specified path
@@ -78,33 +83,45 @@ namespace triaxis.Net.Http
         /// Formats a query string from the interpolated <see cref="FormattableString" />,
         /// appending the specified arguments
         /// </summary>
-        protected static string FormatQuery<T>(FormattableString query, T args)
+        protected string FormatQuery<T>(FormattableString query, T args)
             => FormatQuery(FormatQuery(query), args);
         /// <summary>
         /// Formats a query string from the string, appending the specified arguments
         /// </summary>
-        protected static string FormatQuery<T>(string query, T args)
-            => QueryStringFormatter<T>.Format(query, args);
+        protected string FormatQuery<T>(string query, T args)
+            => QueryStringFormatter<T>.Format(query, args, QueryStringFormatName, QueryStringFormatValue);
 
         /// <summary>
         /// Executes the specified query using the specified method, deserializing the result
         /// </summary>
-        public Task<T> ExecuteAsync<T>(HttpMethod method, string query)
+        public Task<T?> ExecuteAsync<T>(HttpMethod method, string query)
             => ExecuteAsync<T, object>(method, query, null);
         /// <summary>
         /// Executes the specified query using the specified method with the provided content, deserializing the result
         /// </summary>
-        public async Task<TResult> ExecuteAsync<TResult, TContent>(HttpMethod method, string query, TContent content)
+        public async Task<TResult?> ExecuteAsync<TResult, TContent>(HttpMethod method, string query, TContent? content)
         {
-            Logger?.LogDebug(">> {Method} {BaseAddress}{Request}", method, BaseAddress, query);
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();
             using var request = new HttpRequestMessage(method, query);
+
+            if (Logger is not null && Logger.IsEnabled(LogLevel.Debug))
+            {
+                if (request.RequestUri?.IsAbsoluteUri == true)
+                {
+                    Logger.LogDebug(">> {Method} {Request}", method, query);
+                }
+                else
+                {
+                    Logger.LogDebug(">> {Method} {BaseAddress}{Request}", method, BaseAddress, query);
+                }
+            }
+
             if (content != null || typeof(TContent) != typeof(object))
             {
                 // always set content, some methods fail without Content-Type set
                 request.Content = content as HttpContent ?? new JsonContent<TContent>(content, SerializerOptions);
             }
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             using var response = await SendAsync(request);
             using var stream = await response.Content.ReadAsStreamAsync();
             sw.Stop();
@@ -130,10 +147,19 @@ namespace triaxis.Net.Http
         /// <remarks>
         /// Default implementation throws an exception
         /// </remarks>
-        protected virtual Task<TResult> OnErrorAsync<TResult>(HttpResponseMessage response)
+        protected virtual Task<TResult?> OnErrorAsync<TResult>(HttpResponseMessage response)
         {
             response.EnsureSuccessStatusCode();
-            return Task.FromResult<TResult>(default);
+            return Task.FromResult<TResult?>(default);
         }
+
+        /// <summary>
+        /// Callback for formatting query string parameter names
+        /// </summary>
+        protected virtual string QueryStringFormatName(string name) => name;
+        /// <summary>
+        /// Callback for formatting query string parameter values
+        /// </summary>
+        protected virtual string? QueryStringFormatValue(object value) => value.ToString();
     }
 }
