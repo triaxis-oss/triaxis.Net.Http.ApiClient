@@ -30,7 +30,7 @@ namespace triaxis.Net.Http
             AllowTrailingCommas = true,
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            IgnoreNullValues = true,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         };
 
         /// <summary>
